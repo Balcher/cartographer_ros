@@ -23,7 +23,7 @@ options = {    -- 主要用于和ROS2进行通信和数据收发的配置
   published_frame = "base_link",      -- 将发布map到published_frame之间的tf
   odom_frame = "odom",                -- 位于“published_frame ”和“map_frame”之间，用来发布本地SLAM结果（非闭环），通常是“odom”
   provide_odom_frame = true,          -- 是否提供里程计
-  publish_frame_projected_to_2d = false,  -- 只发布二维位姿态（不包含俯仰角）
+  publish_frame_projected_to_2d = true,  -- 只发布二维位姿态（不包含俯仰角）
   use_pose_extrapolator = true,
   use_odometry = false,               -- 是否使用里程计数据
   use_nav_sat = false,                -- 是否使用GPS定位
@@ -41,9 +41,27 @@ options = {    -- 主要用于和ROS2进行通信和数据收发的配置
   fixed_frame_pose_sampling_ratio = 1.,  -- 固定的frame位姿采样率
   imu_sampling_ratio = 1.,            -- IMU数据采样率
   landmarks_sampling_ratio = 1.,      -- 路标采样率
+
 }
 
 MAP_BUILDER.use_trajectory_builder_2d = true
-TRAJECTORY_BUILDER_2D.num_accumulated_range_data = 10
+TRAJECTORY_BUILDER_2D.num_accumulated_range_data = 30
+-- TRAJECTORY_BUILDER_2D.use_online_correlative_scan_matching = true -- 开启使用实时回环检测来进行前端的扫描匹配
+TRAJECTORY_BUILDER_2D.use_imu_data =  true  
+TRAJECTORY_BUILDER_2D.motion_filter.max_angle_radians = math.rad(2.)  -- 提高对运动敏感
+-- TRAJECTORY_BUILDER_2D.motion_filter.max_distance_meters = 2.
+TRAJECTORY_BUILDER_2D.ceres_scan_matcher.occupied_space_weight = 2.
+TRAJECTORY_BUILDER_2D.submaps.num_range_data = 95.
+-- POSE_GRAPH.constraint_builder.min_score = 0.65
+TRAJECTORY_BUILDER_2D.ceres_scan_matcher.ceres_solver_options.max_num_iterations = 30
+
+
+POSE_GRAPH.constraint_builder.max_constraint_distance = 12
+
+POSE_GRAPH.optimize_every_n_nodes = 60
+POSE_GRAPH.constraint_builder.min_score = 0.65
+POSE_GRAPH.constraint_builder.global_localization_min_score = 0.7
+POSE_GRAPH.optimization_problem.huber_scale = 1e2
+
 
 return options

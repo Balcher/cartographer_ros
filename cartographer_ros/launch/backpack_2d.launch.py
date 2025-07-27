@@ -27,7 +27,7 @@ import os
 def generate_launch_description():
 
     ## ***** Launch arguments *****
-    use_sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value = 'False')
+    use_sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value = 'True')
 
     ## ***** File paths ******
     pkg_share = FindPackageShare('cartographer_ros').find('cartographer_ros')

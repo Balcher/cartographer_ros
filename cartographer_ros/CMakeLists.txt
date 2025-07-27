@@ -72,7 +72,7 @@ add_library(${PROJECT_NAME} SHARED
   src/node_constants.cpp
   src/node.cpp
   src/node_options.cpp
-  src/offline_node.cpp
+#   src/offline_node.cpp
   src/playable_bag.cpp
   src/ros_log_sink.cpp
   src/ros_map.cpp
@@ -164,18 +164,18 @@ target_link_libraries(cartographer_occupancy_grid_node PRIVATE
   rclcpp::rclcpp
 )
 
-add_executable(cartographer_offline_node src/offline_node_main.cpp)
-target_include_directories(cartographer_offline_node PRIVATE
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
-)
-target_link_libraries(cartographer_offline_node PRIVATE
-  ${PROJECT_NAME}
-  cartographer
-  gflags
-  rclcpp::rclcpp
-)
+# add_executable(cartographer_offline_node src/offline_node_main.cpp)
+# target_include_directories(cartographer_offline_node PRIVATE
+#   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+#   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+#   "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
+# )
+# target_link_libraries(cartographer_offline_node PRIVATE
+#   ${PROJECT_NAME}
+#   cartographer
+#   gflags
+#   rclcpp::rclcpp
+# )
 
 add_executable(cartographer_assets_writer src/assets_writer_main.cpp)
 target_include_directories(cartographer_assets_writer PRIVATE
@@ -260,7 +260,7 @@ install(TARGETS ${PROJECT_NAME}
 install(TARGETS
   cartographer_node
   cartographer_occupancy_grid_node
-  cartographer_offline_node
+#   cartographer_offline_node
   cartographer_assets_writer
   cartographer_pbstream_map_publisher
   cartographer_pbstream_to_ros_map
