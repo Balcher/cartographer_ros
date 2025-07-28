@@ -33,7 +33,8 @@ constexpr double kTrajectoryLineStripMarkerScale = 0.07;
 constexpr double kLandmarkMarkerScale = 0.2;
 constexpr double kConstraintMarkerScale = 0.025;
 
-::std_msgs::msg::ColorRGBA ToMessage(const cartographer::io::FloatColor& color) {
+::std_msgs::msg::ColorRGBA ToMessage(
+    const cartographer::io::FloatColor& color) {
   ::std_msgs::msg::ColorRGBA result;
   result.r = color[0];
   result.g = color[1];
@@ -42,9 +43,9 @@ constexpr double kConstraintMarkerScale = 0.025;
   return result;
 }
 
-visualization_msgs::msg::Marker CreateTrajectoryMarker(const int trajectory_id,
-                                                  const std::string& frame_id,
-                                                  rclcpp::Time node_time) {
+visualization_msgs::msg::Marker CreateTrajectoryMarker(
+    const int trajectory_id, const std::string& frame_id,
+    rclcpp::Time node_time) {
   visualization_msgs::msg::Marker marker;
   marker.ns = "Trajectory " + std::to_string(trajectory_id);
   marker.id = 0;
@@ -70,10 +71,9 @@ int GetLandmarkIndex(
   return it->second;
 }
 
-visualization_msgs::msg::Marker CreateLandmarkMarker(int landmark_index,
-                                                const Rigid3d& landmark_pose,
-                                                const std::string& frame_id,
-                                                rclcpp::Time node_time) {
+visualization_msgs::msg::Marker CreateLandmarkMarker(
+    int landmark_index, const Rigid3d& landmark_pose,
+    const std::string& frame_id, rclcpp::Time node_time) {
   visualization_msgs::msg::Marker marker;
   marker.ns = "Landmarks";
   marker.id = landmark_index;
@@ -88,8 +88,9 @@ visualization_msgs::msg::Marker CreateLandmarkMarker(int landmark_index,
   return marker;
 }
 
-void PushAndResetLineMarker(visualization_msgs::msg::Marker* marker,
-                            std::vector<visualization_msgs::msg::Marker>* markers) {
+void PushAndResetLineMarker(
+    visualization_msgs::msg::Marker* marker,
+    std::vector<visualization_msgs::msg::Marker>* markers) {
   markers->push_back(*marker);
   ++marker->id;
   marker->points.clear();
@@ -168,25 +169,37 @@ bool MapBuilderBridge::SerializeState(const std::string& filename,
                                             filename);
 }
 
+// 负责处理来自ROS服务的子地图查询请求，它根据请求中的参数查询子地图，并将结果填充到响应中。
 void MapBuilderBridge::HandleSubmapQuery(
     const cartographer_ros_msgs::srv::SubmapQuery::Request::SharedPtr request,
     cartographer_ros_msgs::srv::SubmapQuery::Response::SharedPtr response) {
+  // 创建一个 response_proto 对象，用于存储从地图构建器获取的子地图信息
   cartographer::mapping::proto::SubmapQuery::Response response_proto;
+  //   构造子地图ID，从请求中获取轨迹ID和子图索引
   cartographer::mapping::SubmapId submap_id{request->trajectory_id,
                                             request->submap_index};
+
+  // 调用地图构建器的 SubmapToProto 方法，将子地图信息填充到 response_proto 中
   const std::string error =
       map_builder_->SubmapToProto(submap_id, &response_proto);
+  // 如果获取子地图信息失败，返回错误信息
   if (!error.empty()) {
     LOG(ERROR) << error;
+    // 设置响应的状态为 NOT_FOUND，同时返回错误信息，然后退出函数。
     response->status.code = cartographer_ros_msgs::msg::StatusCode::NOT_FOUND;
     response->status.message = error;
     return;
   }
 
+  // 填充响应数据，将 response_protp中的子地图版本信息复制到响应对象中
   response->submap_version = response_proto.submap_version();
+  //   处理纹理信息
   for (const auto& texture_proto : response_proto.textures()) {
+    // 遍历每个纹理信息，对于每个纹理，创建一个新的纹理对象，并将其填充到响应中。
     response->textures.emplace_back();
     auto& texture = response->textures.back();
+    // 将纹理的单元格（cells）、宽度（width）、高度（height）、分辨率（resolution）和切片姿态（slice_pose）从
+    // texture_proto 复制到响应的纹理对象中
     texture.cells.insert(texture.cells.begin(), texture_proto.cells().begin(),
                          texture_proto.cells().end());
     texture.width = texture_proto.width();
@@ -195,6 +208,7 @@ void MapBuilderBridge::HandleSubmapQuery(
     texture.slice_pose = ToGeometryMsgPose(
         cartographer::transform::ToRigid3(texture_proto.slice_pose()));
   }
+  // 设置响应的状态为 OK，表示成功处理查询请求
   response->status.message = "Success.";
   response->status.code = cartographer_ros_msgs::msg::StatusCode::OK;
 }
@@ -212,7 +226,8 @@ MapBuilderBridge::GetTrajectoryStates() {
   return trajectory_states;
 }
 
-cartographer_ros_msgs::msg::SubmapList MapBuilderBridge::GetSubmapList(rclcpp::Time node_time) {
+cartographer_ros_msgs::msg::SubmapList MapBuilderBridge::GetSubmapList(
+    rclcpp::Time node_time) {
   cartographer_ros_msgs::msg::SubmapList submap_list;
   submap_list.header.stamp = node_time;
   submap_list.header.frame_id = node_options_.map_frame;
@@ -260,7 +275,8 @@ MapBuilderBridge::GetLocalTrajectoryData() {
 }
 
 void MapBuilderBridge::HandleTrajectoryQuery(
-    const cartographer_ros_msgs::srv::TrajectoryQuery::Request::SharedPtr request,
+    const cartographer_ros_msgs::srv::TrajectoryQuery::Request::SharedPtr
+        request,
     cartographer_ros_msgs::srv::TrajectoryQuery::Response::SharedPtr response) {
   // This query is safe if the trajectory doesn't exist (returns 0 poses).
   // However, we can filter unwanted states at the higher level in the node.
@@ -278,14 +294,14 @@ void MapBuilderBridge::HandleTrajectoryQuery(
     response->trajectory.push_back(pose_stamped);
   }
   response->status.code = cartographer_ros_msgs::msg::StatusCode::OK;
-  response->status.message =
-      "Retrieved " + std::to_string(response->trajectory.size()) +
-      " trajectory nodes from trajectory " + std::to_string(request->trajectory_id) + ".";
+  response->status.message = "Retrieved " +
+                             std::to_string(response->trajectory.size()) +
+                             " trajectory nodes from trajectory " +
+                             std::to_string(request->trajectory_id) + ".";
 }
 
 visualization_msgs::msg::MarkerArray MapBuilderBridge::GetTrajectoryNodeList(
-    rclcpp::Time node_time)
-{
+    rclcpp::Time node_time) {
   visualization_msgs::msg::MarkerArray trajectory_node_list;
   const auto node_poses = map_builder_->pose_graph()->GetTrajectoryNodePoses();
   // Find the last node indices for each trajectory that have either
@@ -320,8 +336,8 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetTrajectoryNodeList(
   }
 
   for (const int trajectory_id : node_poses.trajectory_ids()) {
-    visualization_msgs::msg::Marker marker =
-        CreateTrajectoryMarker(trajectory_id, node_options_.map_frame, node_time);
+    visualization_msgs::msg::Marker marker = CreateTrajectoryMarker(
+        trajectory_id, node_options_.map_frame, node_time);
     int last_inter_submap_constrained_node = std::max(
         node_poses.trajectory(trajectory_id).begin()->id.node_index,
         trajectory_to_last_inter_submap_constrained_node.at(trajectory_id));
@@ -386,8 +402,7 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetTrajectoryNodeList(
 }
 
 visualization_msgs::msg::MarkerArray MapBuilderBridge::GetLandmarkPosesList(
-    rclcpp::Time node_time)
-{
+    rclcpp::Time node_time) {
   visualization_msgs::msg::MarkerArray landmark_poses_list;
   const std::map<std::string, Rigid3d> landmark_poses =
       map_builder_->pose_graph()->GetLandmarkPoses();
@@ -399,7 +414,8 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetLandmarkPosesList(
   return landmark_poses_list;
 }
 
-visualization_msgs::msg::MarkerArray MapBuilderBridge::GetConstraintList(rclcpp::Time node_time) {
+visualization_msgs::msg::MarkerArray MapBuilderBridge::GetConstraintList(
+    rclcpp::Time node_time) {
   visualization_msgs::msg::MarkerArray constraint_list;
   int marker_id = 0;
   visualization_msgs::msg::Marker constraint_intra_marker;
@@ -411,7 +427,8 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetConstraintList(rclcpp:
   constraint_intra_marker.scale.x = kConstraintMarkerScale;
   constraint_intra_marker.pose.orientation.w = 1.0;
 
-  visualization_msgs::msg::Marker residual_intra_marker = constraint_intra_marker;
+  visualization_msgs::msg::Marker residual_intra_marker =
+      constraint_intra_marker;
   residual_intra_marker.id = marker_id++;
   residual_intra_marker.ns = "Intra residuals";
   // This and other markers which are less numerous are set to be slightly
