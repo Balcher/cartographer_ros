@@ -29,9 +29,10 @@ namespace {
 
 using ::cartographer::transform::Rigid3d;
 
-constexpr double kTrajectoryLineStripMarkerScale = 0.07;
-constexpr double kLandmarkMarkerScale = 0.2;
-constexpr double kConstraintMarkerScale = 0.025;
+constexpr double kTrajectoryLineStripMarkerScale =
+    0.07;  // 可视化标记的缩放比例（可能是用于设置轨迹线条标记的缩放比例）
+constexpr double kLandmarkMarkerScale = 0.2;      // 地标标记的缩放比例
+constexpr double kConstraintMarkerScale = 0.025;  // 约束标记的缩放比例
 
 ::std_msgs::msg::ColorRGBA ToMessage(
     const cartographer::io::FloatColor& color) {
@@ -59,6 +60,7 @@ visualization_msgs::msg::Marker CreateTrajectoryMarker(
   return marker;
 }
 
+// 获取地标索引，如果地标 ID 不存在于映射中，则添加新的索引并返回。
 int GetLandmarkIndex(
     const std::string& landmark_id,
     std::unordered_map<std::string, int>* landmark_id_to_index) {
@@ -71,6 +73,7 @@ int GetLandmarkIndex(
   return it->second;
 }
 
+// 创建地标标记，包含地标的位姿、缩放和颜色等信息。
 visualization_msgs::msg::Marker CreateLandmarkMarker(
     int landmark_index, const Rigid3d& landmark_pose,
     const std::string& frame_id, rclcpp::Time node_time) {
@@ -88,6 +91,7 @@ visualization_msgs::msg::Marker CreateLandmarkMarker(
   return marker;
 }
 
+// 将线标记推入标记数组，并重置线标记的点列表和 ID。
 void PushAndResetLineMarker(
     visualization_msgs::msg::Marker* marker,
     std::vector<visualization_msgs::msg::Marker>* markers) {
@@ -149,6 +153,7 @@ int MapBuilderBridge::AddTrajectory(
   return trajectory_id;
 }
 
+// 结束指定 ID 的轨迹，并从传感器桥中删除该轨迹。
 void MapBuilderBridge::FinishTrajectory(const int trajectory_id) {
   LOG(INFO) << "Finishing trajectory with ID '" << trajectory_id << "'...";
 
@@ -158,11 +163,13 @@ void MapBuilderBridge::FinishTrajectory(const int trajectory_id) {
   sensor_bridges_.erase(trajectory_id);
 }
 
+// 运行最终优化，通常在所有轨迹完成后调用。
 void MapBuilderBridge::RunFinalOptimization() {
   LOG(INFO) << "Running final trajectory optimization...";
   map_builder_->pose_graph()->RunFinalOptimization();
 }
 
+// 序列化当前状态到指定文件，包含未完成的子地图。
 bool MapBuilderBridge::SerializeState(const std::string& filename,
                                       const bool include_unfinished_submaps) {
   return map_builder_->SerializeStateToFile(include_unfinished_submaps,
@@ -226,6 +233,7 @@ MapBuilderBridge::GetTrajectoryStates() {
   return trajectory_states;
 }
 
+// 获取子地图列表，返回一个包含子地图信息的消息。
 cartographer_ros_msgs::msg::SubmapList MapBuilderBridge::GetSubmapList(
     rclcpp::Time node_time) {
   cartographer_ros_msgs::msg::SubmapList submap_list;
@@ -245,6 +253,7 @@ cartographer_ros_msgs::msg::SubmapList MapBuilderBridge::GetSubmapList(
   return submap_list;
 }
 
+// 获取局部轨迹数据，返回一个映射，键为轨迹 ID，值为局部轨迹数据。
 std::unordered_map<int, MapBuilderBridge::LocalTrajectoryData>
 MapBuilderBridge::GetLocalTrajectoryData() {
   std::unordered_map<int, LocalTrajectoryData> local_trajectory_data;
@@ -274,6 +283,7 @@ MapBuilderBridge::GetLocalTrajectoryData() {
   return local_trajectory_data;
 }
 
+// 获取轨迹节点列表，返回一个包含轨迹节点的可视化标记数组。
 void MapBuilderBridge::HandleTrajectoryQuery(
     const cartographer_ros_msgs::srv::TrajectoryQuery::Request::SharedPtr
         request,
@@ -300,6 +310,7 @@ void MapBuilderBridge::HandleTrajectoryQuery(
                              std::to_string(request->trajectory_id) + ".";
 }
 
+// 获取轨迹节点列表，返回一个包含轨迹节点的可视化标记数组。
 visualization_msgs::msg::MarkerArray MapBuilderBridge::GetTrajectoryNodeList(
     rclcpp::Time node_time) {
   visualization_msgs::msg::MarkerArray trajectory_node_list;
@@ -401,6 +412,7 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetTrajectoryNodeList(
   return trajectory_node_list;
 }
 
+// 获取地标位姿列表，返回一个包含地标位姿的可视化标记数组。
 visualization_msgs::msg::MarkerArray MapBuilderBridge::GetLandmarkPosesList(
     rclcpp::Time node_time) {
   visualization_msgs::msg::MarkerArray landmark_poses_list;
@@ -413,7 +425,7 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetLandmarkPosesList(
   }
   return landmark_poses_list;
 }
-
+// 获取约束列表，返回一个包含约束信息的可视化标记数组。
 visualization_msgs::msg::MarkerArray MapBuilderBridge::GetConstraintList(
     rclcpp::Time node_time) {
   visualization_msgs::msg::MarkerArray constraint_list;
@@ -541,14 +553,27 @@ visualization_msgs::msg::MarkerArray MapBuilderBridge::GetConstraintList(
   return constraint_list;
 }
 
+// 获取传感器桥，返回指定轨迹 ID 的传感器桥指针。
 SensorBridge* MapBuilderBridge::sensor_bridge(const int trajectory_id) {
   return sensor_bridges_.at(trajectory_id).get();
 }
 
+// 这个函数的主要目的是处理来自局部SLAM的结果，并将其存储在内部数据结构中
 void MapBuilderBridge::OnLocalSlamResult(
     const int trajectory_id, const ::cartographer::common::Time time,
     const Rigid3d local_pose,
     ::cartographer::sensor::RangeData range_data_in_local) {
+  // 创建一个新的 LocalSlamData 对象，并将其存储在 local_slam_data_ 中
+  // local_slam_data_ 是一个线程安全的映射，用于存储每个轨迹的局部SLAM数据
+  // 使用 std::make_shared 创建一个智能指针，确保内存管理的安全性
+  // LocalSlamData 包含时间戳、局部位姿和局部范围数据
+  // 这些数据将用于后续的处理和可视化
+  // 使用 absl::MutexLock 确保对 local_slam_data_ 的访问是线程安全的
+  // 这样可以避免在多线程环境中对同一数据结构的并发访问导致的数据竞争问题
+  // 将创建的 LocalSlamData 对象存储在 local_slam_data_ 中，使用 trajectory_id
+  // 作为键 这样可以确保每个轨迹的局部SLAM数据是独立存储的 通过 std::move 将
+  // range_data_in_local 移动到 LocalSlamData 中，避免不必要的拷贝
+  // 这样可以提高性能，特别是在处理大数据量时
   std::shared_ptr<const LocalTrajectoryData::LocalSlamData> local_slam_data =
       std::make_shared<LocalTrajectoryData::LocalSlamData>(
           LocalTrajectoryData::LocalSlamData{time, local_pose,

@@ -28,6 +28,7 @@ using carto::transform::Rigid3d;
 
 namespace {
 
+// 检查坐标框架 ID 是否以斜杠开头，如果是，则抛出异常。
 const std::string& CheckNoLeadingSlash(const std::string& frame_id) {
   if (frame_id.size() > 0) {
     CHECK_NE(frame_id[0], '/') << "The frame_id " << frame_id
@@ -39,6 +40,7 @@ const std::string& CheckNoLeadingSlash(const std::string& frame_id) {
 
 }  // namespace
 
+// 主要工作就是把参数表赋值给成员函数
 SensorBridge::SensorBridge(
     const int num_subdivisions_per_laser_scan,
     const std::string& tracking_frame,
@@ -48,21 +50,31 @@ SensorBridge::SensorBridge(
       tf_bridge_(tracking_frame, lookup_transform_timeout_sec, tf_buffer),
       trajectory_builder_(trajectory_builder) {}
 
+// 定义 SensorBridge 类的 ToOdometryData 成员函数，接收一个指向
+// nav_msgs::msg::Odometry 消息的常量共享指针 返回一个指向
+// carto::sensor::OdometryData 的唯一指针
 std::unique_ptr<carto::sensor::OdometryData> SensorBridge::ToOdometryData(
     const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
+  //  将ROS2 消息中的时间戳转换为 Cartographer 使用的时间戳格式
   const carto::common::Time time = FromRos(msg->header.stamp);
+  // 使用 tf_bridge_ 查找从里程计传感器坐标系到跟踪坐标系的变换。
+  // CheckNoLeadingSlash(msg->child_frame_id)
+  // 确保传感器坐标系的名称没有以斜杠开头。
   const auto sensor_to_tracking = tf_bridge_.LookupToTracking(
       time, CheckNoLeadingSlash(msg->child_frame_id));
   if (sensor_to_tracking == nullptr) {
     return nullptr;
   }
+  // 使用absl::make_unique 创建一个新的 carto::sensor::OdometryData 对象，
+  // 将转换后的时间和经过坐标系变换后的位姿赋值给该对象
   return absl::make_unique<carto::sensor::OdometryData>(
       carto::sensor::OdometryData{
           time, ToRigid3d(msg->pose.pose) * sensor_to_tracking->inverse()});
 }
 
 void SensorBridge::HandleOdometryMessage(
-    const std::string& sensor_id, const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
+    const std::string& sensor_id,
+    const nav_msgs::msg::Odometry::ConstSharedPtr& msg) {
   std::unique_ptr<carto::sensor::OdometryData> odometry_data =
       ToOdometryData(msg);
   if (odometry_data != nullptr) {
@@ -73,7 +85,8 @@ void SensorBridge::HandleOdometryMessage(
 }
 
 void SensorBridge::HandleNavSatFixMessage(
-    const std::string& sensor_id, const sensor_msgs::msg::NavSatFix::ConstSharedPtr& msg) {
+    const std::string& sensor_id,
+    const sensor_msgs::msg::NavSatFix::ConstSharedPtr& msg) {
   const carto::common::Time time = FromRos(msg->header.stamp);
   if (msg->status.status == sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX) {
     trajectory_builder_->AddSensorData(
@@ -114,36 +127,44 @@ void SensorBridge::HandleLandmarkMessage(
   trajectory_builder_->AddSensorData(sensor_id, landmark_data);
 }
 
+// 将ros中的IMU消息转换为Cartographer使用的IMU数据格式
 std::unique_ptr<carto::sensor::ImuData> SensorBridge::ToImuData(
     const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
+  // 检查线性加速度的协方差
   CHECK_NE(msg->linear_acceleration_covariance[0], -1)
       << "Your IMU data claims to not contain linear acceleration measurements "
          "by setting linear_acceleration_covariance[0] to -1. Cartographer "
          "requires this data to work. See "
          "http://docs.ros.org/api/sensor_msgs/html/msg/Imu.html.";
+  // 检查角速度的协方差
   CHECK_NE(msg->angular_velocity_covariance[0], -1)
       << "Your IMU data claims to not contain angular velocity measurements "
          "by setting angular_velocity_covariance[0] to -1. Cartographer "
          "requires this data to work. See "
          "http://docs.ros.org/api/sensor_msgs/html/msg/Imu.html.";
-
+  // 将ROS2消息中的时间戳转换为Cartographer使用的时间戳格式
   const carto::common::Time time = FromRos(msg->header.stamp);
+  // 使用tf_bridge_查找从IMU传感器坐标系到跟踪坐标系的变换。
   const auto sensor_to_tracking = tf_bridge_.LookupToTracking(
       time, CheckNoLeadingSlash(msg->header.frame_id));
   if (sensor_to_tracking == nullptr) {
     return nullptr;
   }
+  // 检查IMU传感器坐标系与跟踪坐标系是否重合
   CHECK(sensor_to_tracking->translation().norm() < 1e-5)
       << "The IMU frame must be colocated with the tracking frame. "
          "Transforming linear acceleration into the tracking frame will "
          "otherwise be imprecise.";
+  // 将IMU消息中的线性加速度和角速度转换为Eigen格式，并应用传感器到跟踪坐标系的旋转变换
   return absl::make_unique<carto::sensor::ImuData>(carto::sensor::ImuData{
       time, sensor_to_tracking->rotation() * ToEigen(msg->linear_acceleration),
       sensor_to_tracking->rotation() * ToEigen(msg->angular_velocity)});
 }
 
-void SensorBridge::HandleImuMessage(const std::string& sensor_id,
-                                    const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
+// 该函数的主要作用是处理接收到的 IMU 消息，并将其转换为 Cartographer 所需的数据格式，然后将其添加到轨迹构建器中。
+void SensorBridge::HandleImuMessage(
+    const std::string& sensor_id,
+    const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
   std::unique_ptr<carto::sensor::ImuData> imu_data = ToImuData(msg);
   if (imu_data != nullptr) {
     trajectory_builder_->AddSensorData(
@@ -154,7 +175,8 @@ void SensorBridge::HandleImuMessage(const std::string& sensor_id,
 }
 
 void SensorBridge::HandleLaserScanMessage(
-    const std::string& sensor_id, const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
+    const std::string& sensor_id,
+    const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
   carto::sensor::PointCloudWithIntensities point_cloud;
   carto::common::Time time;
   std::tie(point_cloud, time) = ToPointCloudWithIntensities(*msg);
@@ -230,7 +252,8 @@ void SensorBridge::HandleRangefinder(
     CHECK_LE(ranges.back().time, 0.f);
   }
 
-  // This was added to get rid of the TimedPointCloudData warning for a missing argument
+  // This was added to get rid of the TimedPointCloudData warning for a missing
+  // argument
   std::vector<float> intensities_;
 
   const auto sensor_to_tracking =
@@ -240,7 +263,8 @@ void SensorBridge::HandleRangefinder(
         sensor_id, carto::sensor::TimedPointCloudData{
                        time, sensor_to_tracking->translation().cast<float>(),
                        carto::sensor::TransformTimedPointCloud(
-                           ranges, sensor_to_tracking->cast<float>()), intensities_});
+                           ranges, sensor_to_tracking->cast<float>()),
+                       intensities_});
   }
 }
 
